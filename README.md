@@ -25,7 +25,7 @@ camera-specific metadata, variable network conditions, or camera hardware.
    docker compose logs -f
    ```
 
-7. Open a stream in VLC or enter it as a camera source in the app:
+6. Open a stream in VLC or enter it as a camera source in the app:
 
    ```text
    rtsp://127.0.0.1:8554/front-door
@@ -46,8 +46,26 @@ are restarted, not the containers or other streams. A clip cannot be deleted
 while a configured stream is using it.
 
 Video files are stored in `videos/` and the stream list is persisted in
-`streams.json`. Both are mounted read/write into the publisher container. You
-can still edit `streams.json` manually using this format:
+`streams.json`. Both are mounted read/write into the publisher container.
+Configuration edits are detected automatically, so neither the GUI nor the
+publisher container needs a restart.
+
+## Deploying on Railway
+
+Attach a persistent volume to the publisher service. The app uses Railway's
+`RAILWAY_VOLUME_MOUNT_PATH` automatically, saving `streams.json` at the volume
+root and video files in its `videos/` subdirectory. On a first deploy to an
+empty volume it creates an empty stream configuration. The control panel uses
+Railway's `PORT` environment variable unless `CONTROL_PANEL_PORT` is set.
+Expose that port using a Railway public domain to open the panel. Configure the
+RTSP service's networking separately if a client outside Railway needs to
+connect to the RTSP endpoint.
+
+The GUI is unauthenticated and designed for local development or a protected
+private environment. Do not expose it publicly without placing authentication
+and network restrictions in front of it.
+
+You can still edit `streams.json` manually using this format:
 
 ```json
 {
@@ -68,8 +86,7 @@ can still edit `streams.json` manually using this format:
 - `bitrate` is an FFmpeg bitrate such as `1200k` or `2M`.
 - Clips loop continuously. Audio is omitted from the simulated stream.
 
-The control panel and RTSP port are bound to the local machine by default.
-Do not expose either publicly without adding authentication and appropriate
-network controls. The container layout is suitable for local development;
-deploying this separately on Railway requires attaching persistent storage
-for the video files and configuring Railway networking for the RTSP port.
+The control panel and RTSP port are bound to the local machine by default in
+Docker Compose. The container layout is suitable for local development;
+Railway deployments require persistent storage for the video files and
+separate networking configuration for the RTSP port.

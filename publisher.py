@@ -25,11 +25,51 @@ def stop_requested(_signal_number, _frame):
     STOP.set()
 
 
+def stream_config_path():
+    configured_path = os.environ.get("STREAMS_CONFIG")
+    if configured_path:
+        return Path(configured_path)
+    railway_volume = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    if railway_volume:
+        return Path(railway_volume) / "streams.json"
+    return Path("/config/streams.json")
+
+
+def stream_video_directory():
+    configured_path = os.environ.get("VIDEO_DIR")
+    if configured_path:
+        return Path(configured_path).resolve()
+    railway_volume = os.environ.get("RAILWAY_VOLUME_MOUNT_PATH")
+    if railway_volume:
+        return (Path(railway_volume) / "videos").resolve()
+    return Path("/videos").resolve()
+
+
+def ensure_stream_config(path=None):
+    path = Path(path or stream_config_path())
+    if path.exists():
+        return path
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    template_path = Path(__file__).with_name("streams.default.json")
+    template = template_path.read_bytes() if template_path.is_file() else b'{"streams": []}\n'
+    temporary_path = path.parent / f".{path.name}.{os.getpid()}.tmp"
+    try:
+        with temporary_path.open("xb") as config_file:
+            config_file.write(template)
+        try:
+            os.link(temporary_path, path)
+        except FileExistsError:
+            pass
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
+    return path
+
+
 def load_streams(config_path=None):
-    config_path = Path(
-        config_path or os.environ.get("STREAMS_CONFIG", "/config/streams.json")
-    )
-    video_root = Path(os.environ.get("VIDEO_DIR", "/videos")).resolve()
+    config_path = ensure_stream_config(config_path)
+    video_root = stream_video_directory()
     rtsp_host = os.environ.get("RTSP_HOST", "mediamtx")
     rtsp_port = int(os.environ.get("RTSP_PORT", "8554"))
     if not 1 <= rtsp_port <= 65535:

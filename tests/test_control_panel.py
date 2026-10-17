@@ -160,6 +160,24 @@ class ControlPanelTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["streams"][0]["name"], "missing-camera")
 
+    def test_creates_config_and_video_directory_in_railway_volume(self):
+        mount_path = self.root / "railway-volume"
+        self.config_path.unlink()
+        self.environment.stop()
+        self.environment = patch.dict(os.environ, {
+            "RAILWAY_VOLUME_MOUNT_PATH": str(mount_path),
+            "RTSP_PUBLIC_HOST": "127.0.0.1",
+            "RTSP_PUBLIC_PORT": "8554",
+        }, clear=True)
+        self.environment.start()
+
+        status, payload = self.request_json("/api/state")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["streams"], [])
+        self.assertTrue((mount_path / "streams.json").is_file())
+        self.assertTrue((mount_path / "videos").is_dir())
+
 
 class PublisherReloadTests(unittest.TestCase):
     def test_changed_stream_restarts_publisher_without_restarting_server(self):

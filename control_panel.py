@@ -9,7 +9,13 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
-from publisher import SUPPORTED_VIDEO_EXTENSIONS, load_streams
+from publisher import (
+    SUPPORTED_VIDEO_EXTENSIONS,
+    ensure_stream_config,
+    load_streams,
+    stream_config_path,
+    stream_video_directory,
+)
 
 
 LOGGER = logging.getLogger("rtsp-simulator.control-panel")
@@ -253,15 +259,15 @@ PAGE = """<!doctype html>
 
 
 def video_directory():
-    return Path(os.environ.get("VIDEO_DIR", "/videos")).resolve()
+    return stream_video_directory()
 
 
 def config_file():
-    return Path(os.environ.get("STREAMS_CONFIG", "/config/streams.json"))
+    return stream_config_path()
 
 
 def read_config():
-    with config_file().open(encoding="utf-8") as stream_file:
+    with ensure_stream_config().open(encoding="utf-8") as stream_file:
         config = json.load(stream_file)
     if not isinstance(config, dict) or not isinstance(config.get("streams"), list):
         raise ValueError("Configuration must contain a 'streams' array")
@@ -485,7 +491,7 @@ class ControlPanelHandler(BaseHTTPRequestHandler):
 
 def start_server():
     host = os.environ.get("CONTROL_PANEL_HOST", "0.0.0.0")
-    port = int(os.environ.get("CONTROL_PANEL_PORT", "8765"))
+    port = int(os.environ.get("CONTROL_PANEL_PORT", os.environ.get("PORT", "8765")))
     server = ThreadingHTTPServer((host, port), ControlPanelHandler)
     server.daemon_threads = True
     thread = threading.Thread(target=server.serve_forever, name="control-panel", daemon=True)
