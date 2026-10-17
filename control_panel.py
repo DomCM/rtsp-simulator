@@ -45,7 +45,8 @@ PAGE = """<!doctype html>
     button.secondary { background: #34445c; } button.danger { background: #9f323b; } button:disabled { opacity: .5; cursor: wait; }
     .video-list { display: grid; gap: 8px; } .video-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; border-top: 1px solid #2b3b52; padding: 10px 0; overflow-wrap: anywhere; }
     .video-item:first-child { border-top: 0; } .muted { color: #8192a9; font-size: 13px; }
-    .url { flex: 1 1 100%; color: #87b4ff; font: 13px ui-monospace, monospace; overflow-wrap: anywhere; }
+    .urls { flex: 1 1 100%; display: grid; gap: 6px; }
+    .url { color: #87b4ff; font: 13px ui-monospace, monospace; overflow-wrap: anywhere; }
     #notice { display: none; position: sticky; top: 8px; padding: 11px 14px; margin: 0 0 14px; border-radius: 8px; background: #244b39; z-index: 2; }
     #notice.error { background: #6c2d35; } .empty { padding: 14px 0; color: #8192a9; }
     @media(max-width: 560px) { body { padding: 20px 12px; } section { padding: 15px; } .stream-row > * { flex-basis: 100%; } }
@@ -183,9 +184,18 @@ PAGE = """<!doctype html>
             showNotice('Stream removed.');
           } catch (error) { showNotice(error.message, true); }
         });
-        const url = document.createElement('div');
-        url.className = 'url';
-        url.textContent = stream.url;
+        const urls = document.createElement('div');
+        urls.className = 'urls';
+        const internalUrl = document.createElement('div');
+        internalUrl.className = 'url';
+        internalUrl.textContent = `Private / local: ${stream.private_url}`;
+        urls.append(internalUrl);
+        if (stream.external_url) {
+          const externalUrl = document.createElement('div');
+          externalUrl.className = 'url';
+          externalUrl.textContent = `External / VLC: ${stream.external_url}`;
+          urls.append(externalUrl);
+        }
         row.append(
           field('Name / RTSP path', name),
           field('Video file', file),
@@ -193,7 +203,7 @@ PAGE = """<!doctype html>
           field('Bitrate', bitrate),
           save,
           remove,
-          url,
+          urls,
         );
         streams.append(row);
       }
@@ -351,16 +361,25 @@ class ControlPanelHandler(BaseHTTPRequestHandler):
         if path == "/api/state":
             try:
                 config = read_config()
-                public_port = int(os.environ.get("RTSP_PUBLIC_PORT", "8554"))
-                public_host = os.environ.get("RTSP_PUBLIC_HOST", "127.0.0.1")
+                private_port = int(os.environ.get("RTSP_PRIVATE_PORT", "8554"))
+                private_host = os.environ.get("RTSP_PRIVATE_HOST", "127.0.0.1")
+                external_host = os.environ.get("RTSP_EXTERNAL_HOST", "").strip()
+                external_port = os.environ.get("RTSP_EXTERNAL_PORT", "").strip()
+                if external_host and not external_port:
+                    external_port = str(private_port)
                 stream_items = []
                 for raw in config["streams"]:
+                    name = raw["name"]
                     stream_items.append({
-                        "name": raw["name"],
+                        "name": name,
                         "file": raw["file"],
                         "fps": raw.get("fps", 15),
                         "bitrate": raw.get("bitrate", "1200k"),
-                        "url": f"rtsp://{public_host}:{public_port}/{raw['name']}",
+                        "private_url": f"rtsp://{private_host}:{private_port}/{name}",
+                        "external_url": (
+                            f"rtsp://{external_host}:{external_port}/{name}"
+                            if external_host else None
+                        ),
                     })
                 self.send_json(200, {
                     "streams": stream_items,

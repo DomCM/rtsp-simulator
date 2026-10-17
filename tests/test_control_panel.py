@@ -25,8 +25,8 @@ class ControlPanelTests(unittest.TestCase):
             "STREAMS_CONFIG": str(self.config_path),
             "CONTROL_PANEL_HOST": "127.0.0.1",
             "CONTROL_PANEL_PORT": "0",
-            "RTSP_PUBLIC_HOST": "127.0.0.1",
-            "RTSP_PUBLIC_PORT": "8554",
+            "RTSP_PRIVATE_HOST": "127.0.0.1",
+            "RTSP_PRIVATE_PORT": "8554",
             "RTSP_HOST": "mediamtx",
             "RTSP_PORT": "8554",
         })
@@ -88,7 +88,11 @@ class ControlPanelTests(unittest.TestCase):
         self.assertEqual(status, 200)
 
         status, payload = self.request_json("/api/state")
-        self.assertEqual(payload["streams"][0]["url"], "rtsp://127.0.0.1:8554/test-camera")
+        self.assertEqual(
+            payload["streams"][0]["private_url"],
+            "rtsp://127.0.0.1:8554/test-camera",
+        )
+        self.assertIsNone(payload["streams"][0]["external_url"])
         self.assertEqual(payload["streams"][0]["fps"], 12)
 
         status, payload = self.request_json(
@@ -166,17 +170,53 @@ class ControlPanelTests(unittest.TestCase):
         self.environment.stop()
         self.environment = patch.dict(os.environ, {
             "RAILWAY_VOLUME_MOUNT_PATH": str(mount_path),
-            "RTSP_PUBLIC_HOST": "127.0.0.1",
-            "RTSP_PUBLIC_PORT": "8554",
         }, clear=True)
         self.environment.start()
+        self.config_path = mount_path / "streams.json"
 
         status, payload = self.request_json("/api/state")
 
         self.assertEqual(status, 200)
         self.assertEqual(payload["streams"], [])
-        self.assertTrue((mount_path / "streams.json").is_file())
+        self.assertTrue(self.config_path.is_file())
         self.assertTrue((mount_path / "videos").is_dir())
+
+    def test_returns_private_and_external_urls(self):
+        self.environment.stop()
+        self.environment = patch.dict(os.environ, {
+            "VIDEO_DIR": str(self.video_directory),
+            "STREAMS_CONFIG": str(self.config_path),
+            "CONTROL_PANEL_HOST": "127.0.0.1",
+            "CONTROL_PANEL_PORT": str(self.server.server_address[1]),
+            "RTSP_PRIVATE_HOST": "simulator.railway.internal",
+            "RTSP_PRIVATE_PORT": "8554",
+            "RTSP_EXTERNAL_HOST": "proxy.rlwy.net",
+            "RTSP_EXTERNAL_PORT": "12345",
+        }, clear=True)
+        self.environment.start()
+        self.config_path.write_text(
+            json.dumps({
+                "streams": [{
+                    "name": "test-camera",
+                    "file": "missing.mp4",
+                    "fps": 15,
+                    "bitrate": "1200k",
+                }]
+            }),
+            encoding="utf-8",
+        )
+
+        status, payload = self.request_json("/api/state")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            payload["streams"][0]["private_url"],
+            "rtsp://simulator.railway.internal:8554/test-camera",
+        )
+        self.assertEqual(
+            payload["streams"][0]["external_url"],
+            "rtsp://proxy.rlwy.net:12345/test-camera",
+        )
 
 
 class PublisherReloadTests(unittest.TestCase):

@@ -57,9 +57,15 @@ Attach a persistent volume to the publisher service. The app uses Railway's
 root and video files in its `videos/` subdirectory. On a first deploy to an
 empty volume it creates an empty stream configuration. The control panel uses
 Railway's `PORT` environment variable unless `CONTROL_PANEL_PORT` is set.
-Expose that port using a Railway public domain to open the panel. Configure the
-RTSP service's networking separately if a client outside Railway needs to
-connect to the RTSP endpoint.
+Expose that port using a Railway public domain to open the panel. Configure the RTSP service's networking separately if a client outside
+Railway needs to connect to the RTSP endpoint. Create a Railway TCP Proxy
+targeting the RTSP server's internal port. Set `RTSP_PRIVATE_HOST` to the
+RTSP server service's private Railway hostname, such as
+`mediamtx.railway.internal`, and set `RTSP_PRIVATE_PORT` to its internal
+port (normally `8554`). Set `RTSP_EXTERNAL_HOST` and `RTSP_EXTERNAL_PORT`
+to the hostname and generated port from the TCP Proxy. The control panel
+then shows a private URL for other Railway services and an external URL for
+VLC on your computer.
 
 The GUI is unauthenticated and designed for local development or a protected
 private environment. Do not expose it publicly without placing authentication
