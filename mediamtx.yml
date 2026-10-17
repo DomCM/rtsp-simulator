@@ -1,0 +1,8 @@
+logLevel: info
+logDestinations: [stdout]
+rtsp: true
+rtspTransports: [tcp]
+rtspAddress: :8554
+
+paths:
+  all_others: {}

@@ -1,0 +1,10 @@
+{
+  "streams": [
+    {
+      "name": "front-door",
+      "file": "XVR_ch7_main_20261016134721_20261016135559.mp4",
+      "fps": 15,
+      "bitrate": "1200k"
+    }
+  ]
+}

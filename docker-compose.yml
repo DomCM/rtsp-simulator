@@ -1,0 +1,21 @@
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:1.21.2
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${RTSP_PORT:-8554}:8554/tcp"
+    volumes:
+      - ./mediamtx.yml:/mediamtx.yml:ro
+
+  publisher:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - mediamtx
+    environment:
+      RTSP_HOST: mediamtx
+      STREAMS_CONFIG: /config/streams.json
+      VIDEO_DIR: /videos
+    volumes:
+      - ./streams.json:/config/streams.json:ro
+      - ./videos:/videos:ro

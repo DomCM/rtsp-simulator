@@ -1,0 +1,16 @@
+{
+  "streams": [
+    {
+      "name": "front-door",
+      "file": "front-door.mp4",
+      "fps": 15,
+      "bitrate": "1200k"
+    },
+    {
+      "name": "backyard",
+      "file": "backyard.mp4",
+      "fps": 10,
+      "bitrate": "800k"
+    }
+  ]
+}
