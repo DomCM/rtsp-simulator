@@ -1,1 +1,4 @@
 videos/footage/
+.env
+__pycache__/
+*.py[cod]

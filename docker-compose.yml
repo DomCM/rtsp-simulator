@@ -14,8 +14,14 @@ services:
       - mediamtx
     environment:
       RTSP_HOST: mediamtx
+      RTSP_PORT: "8554"
+      RTSP_PUBLIC_HOST: 127.0.0.1
+      RTSP_PUBLIC_PORT: ${RTSP_PORT:-8554}
+      CONTROL_PANEL_PORT: "8765"
       STREAMS_CONFIG: /config/streams.json
       VIDEO_DIR: /videos
     volumes:
-      - ./streams.json:/config/streams.json:ro
-      - ./videos:/videos:ro
+      - ./streams.json:/config/streams.json
+      - ./videos:/videos
+    ports:
+      - "127.0.0.1:${GUI_PORT:-8765}:8765/tcp"

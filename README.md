@@ -11,15 +11,15 @@ camera-specific metadata, variable network conditions, or camera hardware.
 
 1. Install Docker Desktop with Docker Compose.
 2. Copy `.env.example` to `.env` if you want to change the host RTSP port.
-3. Put video files in `videos/`.
-4. Edit `streams.json` using `streams.example.json` as a reference.
-5. Start the services from this directory:
+3. Start the services from this directory:
 
    ```powershell
    docker compose up --build -d
    ```
 
-6. Check the logs:
+4. Open the control panel at [http://127.0.0.1:8765](http://127.0.0.1:8765).
+   Upload clips and add or edit streams there. The default upload limit is 2 GB.
+5. Check the logs:
 
    ```powershell
    docker compose logs -f
@@ -37,9 +37,17 @@ camera-specific metadata, variable network conditions, or camera hardware.
    can reach the MediaMTX service; `127.0.0.1` inside the app container refers
    to that container, not the host.
 
-## Configure streams
+## Manage videos and streams
 
-`streams.json` accepts one or more stream definitions:
+The control panel at `http://127.0.0.1:8765` lets you upload and delete video
+files, then add, edit, or remove simulated streams. Stream changes are
+validated and take effect automatically; only streams whose settings changed
+are restarted, not the containers or other streams. A clip cannot be deleted
+while a configured stream is using it.
+
+Video files are stored in `videos/` and the stream list is persisted in
+`streams.json`. Both are mounted read/write into the publisher container. You
+can still edit `streams.json` manually using this format:
 
 ```json
 {
@@ -60,14 +68,8 @@ camera-specific metadata, variable network conditions, or camera hardware.
 - `bitrate` is an FFmpeg bitrate such as `1200k` or `2M`.
 - Clips loop continuously. Audio is omitted from the simulated stream.
 
-After changing `streams.json`, restart the publisher:
-
-```powershell
-docker compose restart publisher
-```
-
-The RTSP server is published only on the local machine by default. Do not
-expose it publicly without adding authentication and appropriate network
-controls. The container layout is suitable for local development; deploying
-this separately on Railway requires attaching persistent storage for the
-video files and configuring Railway networking for the RTSP port.
+The control panel and RTSP port are bound to the local machine by default.
+Do not expose either publicly without adding authentication and appropriate
+network controls. The container layout is suitable for local development;
+deploying this separately on Railway requires attaching persistent storage
+for the video files and configuring Railway networking for the RTSP port.

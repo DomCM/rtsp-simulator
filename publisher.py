@@ -25,8 +25,10 @@ def stop_requested(_signal_number, _frame):
     STOP.set()
 
 
-def load_streams():
-    config_path = Path(os.environ.get("STREAMS_CONFIG", "/config/streams.json"))
+def load_streams(config_path=None):
+    config_path = Path(
+        config_path or os.environ.get("STREAMS_CONFIG", "/config/streams.json")
+    )
     video_root = Path(os.environ.get("VIDEO_DIR", "/videos")).resolve()
     rtsp_host = os.environ.get("RTSP_HOST", "mediamtx")
     rtsp_port = int(os.environ.get("RTSP_PORT", "8554"))
@@ -129,49 +131,91 @@ def stop_process(process, stream_name):
         process.wait()
 
 
+def stream_signature(stream):
+    return stream["file"], stream["fps"], stream["bitrate"], stream["url"]
+
+
+def start_publisher(stream, process_record):
+    try:
+        LOGGER.info("Publishing %s from %s", stream["url"], stream["file"].name)
+        process_record["process"] = subprocess.Popen(ffmpeg_command(stream))
+    except OSError:
+        LOGGER.exception("Unable to start publisher for %s", stream["name"])
+        process_record["next_start"] = time.monotonic() + process_record["restart_delay"]
+        process_record["restart_delay"] = min(process_record["restart_delay"] * 2, 30)
+
+
 def run():
-    streams = load_streams()
-    if not streams:
-        LOGGER.info("No streams configured; add entries to streams.json and restart.")
-    else:
-        LOGGER.info("Starting %d simulated RTSP stream(s)", len(streams))
+    from control_panel import start_server
+
+    control_server, control_thread = start_server()
+    LOGGER.info(
+        "Control panel listening on http://127.0.0.1:%s",
+        control_server.server_address[1],
+    )
 
     processes = {}
-    restart_delays = {stream["name"]: 1 for stream in streams}
+    last_config_error = None
     try:
         while not STOP.is_set():
+            try:
+                streams = load_streams()
+                last_config_error = None
+            except (OSError, ValueError, json.JSONDecodeError) as error:
+                error_message = str(error)
+                if error_message != last_config_error:
+                    LOGGER.error("Invalid stream configuration: %s", error_message)
+                    last_config_error = error_message
+                STOP.wait(0.5)
+                continue
+
+            desired_streams = {stream["name"]: stream for stream in streams}
+
+            for name, record in list(processes.items()):
+                desired = desired_streams.get(name)
+                if desired is None or stream_signature(desired) != record["signature"]:
+                    if record["process"] is not None:
+                        stop_process(record["process"], name)
+                    del processes[name]
+
             for stream in streams:
                 name = stream["name"]
-                process = processes.get(name)
+                signature = stream_signature(stream)
+                record = processes.get(name)
+                if record is None:
+                    record = {
+                        "signature": signature,
+                        "process": None,
+                        "restart_delay": 1,
+                        "next_start": 0,
+                    }
+                    processes[name] = record
+
+                process = record["process"]
                 if process is None:
-                    command = ffmpeg_command(stream)
-                    LOGGER.info("Publishing %s from %s", stream["url"], stream["file"].name)
-                    processes[name] = subprocess.Popen(command)
+                    if time.monotonic() >= record["next_start"]:
+                        start_publisher(stream, record)
                     continue
 
                 exit_code = process.poll()
                 if exit_code is not None:
-                    if STOP.is_set():
-                        break
-                    delay = restart_delays[name]
-                    LOGGER.warning(
-                        "Publisher %s exited with status %s; restarting in %s second(s)",
-                        name,
-                        exit_code,
-                        delay,
-                    )
-                    if STOP.wait(delay):
-                        break
-                    restart_delays[name] = min(delay * 2, 30)
-                    processes[name] = None
+                    delay = record["restart_delay"]
+                    LOGGER.warning("Publisher %s exited with status %s", name, exit_code)
+                    record["process"] = None
+                    record["next_start"] = time.monotonic() + delay
+                    record["restart_delay"] = min(delay * 2, 30)
                 else:
-                    restart_delays[name] = 1
+                    record["restart_delay"] = 1
 
             STOP.wait(0.5)
     finally:
-        for name, process in processes.items():
-            if process is not None:
-                stop_process(process, name)
+        STOP.set()
+        control_server.shutdown()
+        control_server.server_close()
+        control_thread.join(timeout=5)
+        for name, record in processes.items():
+            if record["process"] is not None:
+                stop_process(record["process"], name)
 
 
 def main():
